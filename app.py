@@ -1,10 +1,9 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from sklearn.model_selection import train_test_split
-from sklearn.tree import DecisionTreeClassifier
-from sklearn.preprocessing import LabelEncoder
-from sklearn.metrics import accuracy_score
+from sklearn.cluster import KMeans
+from sklearn.preprocessing import StandardScaler
+from sklearn.decomposition import PCA
 import calendar
 
 # --- Main App Configuration ---
@@ -142,13 +141,6 @@ fig_time.update_traces(textposition='inside', textinfo='percent+label')
 st.plotly_chart(fig_time, use_container_width=True)
 
 # Crime Incidents on a Map
-'''st.subheader("Crime Incidents on the Map")
-st.markdown("Zoom and pan to explore crime locations across Bangladesh. The dots represent reported incidents.")
-if not filtered_df.empty:
-    st.map(filtered_df[['latitude', 'longitude', 'crime']].dropna(), color='crime')
-else:
-    st.warning("No data to display on the map with the current filters.")'''
-
 if not filtered_df.empty:
     fig = px.scatter_map(
         filtered_df.dropna(subset=['latitude', 'longitude', 'crime']),
@@ -164,67 +156,168 @@ if not filtered_df.empty:
 else:
     st.warning("No data to display on the map with the current filters.")
 
-# --- Machine Learning Section ---
-st.header("3. Machine Learning Model: Crime Type Prediction")
+# --- Machine Learning Section - Clustering ---
+st.header("3. Crime Pattern Analysis: Clustering")
 st.write(
-    "This section uses a Decision Tree Classifier to predict the type of crime based on various "
-    "geographical and environmental factors."
+    "This section uses K-Means clustering to identify patterns and groups in crime data based on "
+    "geographical, temporal, and environmental factors."
 )
 
-# Prepare data for the model
-# Drop rows with NaN in key features and target
-ml_df = df.dropna(subset=['latitude', 'longitude', 'weather_code', 'humidity', 'total_population', 'density_per_kmsq', 'crime']).copy()
+# Check available columns and create appropriate features
+st.subheader("Available Columns for Clustering")
+st.write("Columns in your dataset:", list(df.columns))
 
-# Features and target
-features = ['latitude', 'longitude', 'weather_code', 'humidity', 'total_population', 'density_per_kmsq']
-target = 'crime'
+# Create a safe list of features that actually exist in the dataset
+available_features = []
+potential_features = [
+    'latitude', 'longitude', 'incident_month', 'weather_code', 
+    'humidity', 'total_population', 'density_per_kmsq'
+]
 
-X = ml_df[features]
-y = ml_df[target]
+for feature in potential_features:
+    if feature in df.columns:
+        available_features.append(feature)
 
-# Encode the target variable
-le = LabelEncoder()
-y_encoded = le.fit_transform(y)
+st.write("Features available for clustering:", available_features)
 
-# Split data
-X_train, X_test, y_train, y_test = train_test_split(X, y_encoded, test_size=0.2, random_state=42)
+# Prepare data for clustering with only available features
+clustering_df = df.dropna(subset=available_features).copy()
 
-# Train the model
-model = DecisionTreeClassifier(random_state=42)
-model.fit(X_train, y_train)
+if len(clustering_df) == 0:
+    st.warning("No data available for clustering after removing missing values.")
+else:
+    X = clustering_df[available_features]
 
-# Evaluate the model
-y_pred = model.predict(X_test)
-accuracy = accuracy_score(y_test, y_pred)
-st.write(f"**Model Accuracy:** {accuracy:.2f}")
-st.info("The model's accuracy is a good starting point but can be improved with more features and a more complex model.")
+    # Standardize the features
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X)
 
-# --- Interactive Prediction Form ---
-st.subheader("Predict a Crime Type")
-st.sidebar.header("Make a Prediction")
-st.sidebar.markdown("Input the values below to get a crime prediction.")
+    # Sidebar for clustering parameters
+    st.sidebar.header("Clustering Parameters")
+    n_clusters = st.sidebar.slider("Number of Clusters", min_value=2, max_value=10, value=4)
 
-# Sliders and inputs for user prediction
-pred_latitude = st.sidebar.slider("Latitude", float(X['latitude'].min()), float(X['latitude'].max()), float(X['latitude'].mean()))
-pred_longitude = st.sidebar.slider("Longitude", float(X['longitude'].min()), float(X['longitude'].max()), float(X['longitude'].mean()))
-pred_weather_code = st.sidebar.number_input("Weather Code", value=int(X['weather_code'].mean()))
-pred_humidity = st.sidebar.slider("Humidity (%)", float(X['humidity'].min()), float(X['humidity'].max()), float(X['humidity'].mean()))
-pred_population = st.sidebar.number_input("Total Population", value=int(X['total_population'].mean()), step=1000)
-pred_density = st.sidebar.number_input("Density (per sq km)", value=float(X['density_per_kmsq'].mean()))
+    # Perform K-means clustering
+    kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
+    clusters = kmeans.fit_predict(X_scaled)
+    clustering_df['Cluster'] = clusters
 
-# Create a button to trigger prediction
-if st.sidebar.button("Predict Crime"):
-    # Prepare the input for the model
-    input_data = pd.DataFrame([[pred_latitude, pred_longitude, pred_weather_code, pred_humidity, pred_population, pred_density]],
-                              columns=features)
-    
-    # Predict the crime
-    predicted_encoded = model.predict(input_data)
-    predicted_crime = le.inverse_transform(predicted_encoded)
-    
-    # Display the result
-    st.sidebar.success(f"The predicted crime is: **{predicted_crime[0]}**")
-    st.sidebar.markdown(f"**How it works:** The model uses the features you provided to classify the most likely crime type.")
+    # Add PCA for visualization if we have enough features
+    if len(available_features) > 1:
+        pca = PCA(n_components=2)
+        X_pca = pca.fit_transform(X_scaled)
+        clustering_df['PCA1'] = X_pca[:, 0]
+        clustering_df['PCA2'] = X_pca[:, 1]
+        
+        # Display PCA explained variance
+        st.write(f"PCA Explained Variance: {pca.explained_variance_ratio_.sum():.2f}")
+
+    # Display clustering results
+    st.subheader(f"Clustering Results ({n_clusters} Clusters)")
+
+    # Cluster distribution
+    cluster_counts = clustering_df['Cluster'].value_counts().sort_index()
+    fig_cluster_dist = px.bar(
+        x=cluster_counts.index,
+        y=cluster_counts.values,
+        labels={'x': 'Cluster', 'y': 'Number of Incidents'},
+        title=f"Distribution of Crime Incidents Across {n_clusters} Clusters",
+        color=cluster_counts.index,
+        template="plotly_white"
+    )
+    st.plotly_chart(fig_cluster_dist, use_container_width=True)
+
+    # PCA visualization (only if we have PCA components)
+    if 'PCA1' in clustering_df.columns and 'PCA2' in clustering_df.columns:
+        fig_pca = px.scatter(
+            clustering_df,
+            x='PCA1',
+            y='PCA2',
+            color='Cluster',
+            hover_data=['crime', 'incident_division'],
+            title="PCA Visualization of Crime Clusters",
+            template="plotly_white"
+        )
+        st.plotly_chart(fig_pca, use_container_width=True)
+
+    # Cluster characteristics
+    st.subheader("Cluster Characteristics")
+
+    # Display mean values for each cluster
+    cluster_means = clustering_df.groupby('Cluster')[available_features].mean()
+    st.write("Average Feature Values by Cluster:")
+    st.dataframe(cluster_means.style.background_gradient(cmap='Blues'))
+
+    # Crime type distribution within clusters
+    st.subheader("Crime Type Distribution within Clusters")
+    cluster_crime_dist = pd.crosstab(clustering_df['Cluster'], clustering_df['crime'], normalize='index') * 100
+    fig_cluster_crime = px.imshow(
+        cluster_crime_dist,
+        title="Crime Type Distribution by Cluster (%)",
+        aspect="auto",
+        color_continuous_scale="Blues"
+    )
+    st.plotly_chart(fig_cluster_crime, use_container_width=True)
+
+    # Geographical visualization of clusters
+    st.subheader("Geographical Distribution of Clusters")
+    if not clustering_df.empty:
+        fig_cluster_map = px.scatter_map(
+            clustering_df,
+            lat='latitude',
+            lon='longitude',
+            color='Cluster',
+            hover_name='crime',
+            hover_data=['incident_division', 'incident_month'],
+            title="Geographical Distribution of Crime Clusters",
+            zoom=6,
+            height=600
+        )
+        fig_cluster_map.update_layout(mapbox_style="open-street-map")
+        st.plotly_chart(fig_cluster_map, use_container_width=True)
+
+    # Cluster interpretation
+    st.subheader("Cluster Interpretation")
+    st.write("""
+    **How to interpret the clusters:**
+    - Each cluster represents a group of crime incidents with similar characteristics
+    - Clusters may represent patterns like: urban vs rural crimes, seasonal patterns, 
+      weather-related patterns, or population density correlations
+    - Use the cluster characteristics table to understand what makes each cluster unique
+    """)
+
+    # Interactive cluster exploration
+    st.sidebar.header("Explore Specific Cluster")
+    selected_cluster = st.sidebar.selectbox("Select Cluster to Explore", options=sorted(clustering_df['Cluster'].unique()))
+
+    if selected_cluster is not None:
+        cluster_data = clustering_df[clustering_df['Cluster'] == selected_cluster]
+        
+        st.subheader(f"Detailed Analysis of Cluster {selected_cluster}")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            # Top crimes in cluster
+            top_crimes = cluster_data['crime'].value_counts().head(5)
+            fig_top_crimes = px.bar(
+                x=top_crimes.index,
+                y=top_crimes.values,
+                title=f"Top 5 Crimes in Cluster {selected_cluster}",
+                labels={'x': 'Crime Type', 'y': 'Count'},
+                color=top_crimes.values,
+                color_continuous_scale="Blues"
+            )
+            st.plotly_chart(fig_top_crimes, use_container_width=True)
+        
+        with col2:
+            # Division distribution in cluster
+            division_dist = cluster_data['incident_division'].value_counts()
+            fig_division_dist = px.pie(
+                values=division_dist.values,
+                names=division_dist.index,
+                title=f"Division Distribution in Cluster {selected_cluster}",
+                hole=0.4
+            )
+            st.plotly_chart(fig_division_dist, use_container_width=True)
 
 st.markdown("---")
-
