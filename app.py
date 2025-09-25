@@ -1,10 +1,13 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
+from sklearn.metrics import silhouette_score
 import calendar
+import numpy as np
 
 # --- Main App Configuration ---
 st.set_page_config(
@@ -194,9 +197,109 @@ else:
 
     # Sidebar for clustering parameters
     st.sidebar.header("Clustering Parameters")
-    n_clusters = st.sidebar.slider("Number of Clusters", min_value=2, max_value=10, value=4)
+    
+    # Elbow Method Section
+    st.subheader("Elbow Method for Optimal Cluster Selection")
+    st.write("The elbow method helps determine the optimal number of clusters by finding the point where the inertia (within-cluster sum of squares) starts decreasing linearly.")
+    
+    # Calculate inertia for different numbers of clusters
+    max_clusters = min(10, len(X_scaled) - 1)  # Ensure we don't exceed data points
+    inertia_values = []
+    silhouette_scores = []
+    k_range = range(2, max_clusters + 1)
+    
+    with st.spinner("Calculating optimal number of clusters..."):
+        for k in k_range:
+            kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
+            kmeans.fit(X_scaled)
+            inertia_values.append(kmeans.inertia_)
+            
+            # Calculate silhouette score (if enough data points)
+            if k < len(X_scaled):
+                silhouette_scores.append(silhouette_score(X_scaled, kmeans.labels_))
+            else:
+                silhouette_scores.append(0)
+    
+    # Create elbow plot
+    fig_elbow = go.Figure()
+    fig_elbow.add_trace(go.Scatter(
+        x=list(k_range),
+        y=inertia_values,
+        mode='lines+markers',
+        name='Inertia',
+        line=dict(color='blue', width=2),
+        marker=dict(size=8)
+    ))
+    fig_elbow.update_layout(
+        title='Elbow Method for Optimal Number of Clusters',
+        xaxis_title='Number of Clusters',
+        yaxis_title='Inertia (Within-cluster Sum of Squares)',
+        template="plotly_white"
+    )
+    
+    # Add silhouette score plot
+    fig_silhouette = go.Figure()
+    fig_silhouette.add_trace(go.Scatter(
+        x=list(k_range),
+        y=silhouette_scores,
+        mode='lines+markers',
+        name='Silhouette Score',
+        line=dict(color='green', width=2),
+        marker=dict(size=8)
+    ))
+    fig_silhouette.update_layout(
+        title='Silhouette Scores for Different Numbers of Clusters',
+        xaxis_title='Number of Clusters',
+        yaxis_title='Silhouette Score',
+        template="plotly_white"
+    )
+    
+    # Display both plots side by side
+    col1, col2 = st.columns(2)
+    with col1:
+        st.plotly_chart(fig_elbow, use_container_width=True)
+    with col2:
+        st.plotly_chart(fig_silhouette, use_container_width=True)
+    
+    # Find suggested optimal k (elbow point)
+    # Simple method: find the point where the decrease in inertia starts to slow down
+    differences = [inertia_values[i-1] - inertia_values[i] for i in range(1, len(inertia_values))]
+    if differences:
+        # Find the point with the largest change in the rate of decrease
+        second_differences = [differences[i-1] - differences[i] for i in range(1, len(differences))]
+        if second_differences:
+            suggested_k = k_range[second_differences.index(max(second_differences)) + 2]
+        else:
+            suggested_k = 3  # Default fallback
+    else:
+        suggested_k = 3
+    
+    # Also consider silhouette scores
+    silhouette_optimal = k_range[silhouette_scores.index(max(silhouette_scores))]
+    
+    st.info(f"""
+    **Optimal Cluster Suggestions:**
+    - **Elbow method suggests**: {suggested_k} clusters
+    - **Silhouette method suggests**: {silhouette_optimal} clusters (score: {max(silhouette_scores):.3f})
+    """)
+    
+    # Let user choose between suggested or manual
+    cluster_choice = st.radio(
+        "Choose number of clusters:",
+        ["Use elbow method suggestion", "Use silhouette method suggestion", "Choose manually"],
+        index=0
+    )
+    
+    if cluster_choice == "Use elbow method suggestion":
+        n_clusters = suggested_k
+    elif cluster_choice == "Use silhouette method suggestion":
+        n_clusters = silhouette_optimal
+    else:
+        n_clusters = st.slider("Number of Clusters", min_value=2, max_value=max_clusters, value=suggested_k)
+    
+    st.sidebar.write(f"**Selected clusters:** {n_clusters}")
 
-    # Perform K-means clustering
+    # Perform K-means clustering with selected k
     kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
     clusters = kmeans.fit_predict(X_scaled)
     clustering_df['Cluster'] = clusters
