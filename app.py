@@ -306,11 +306,13 @@ else:
     )
     fig_map_cluster.update_layout(mapbox_style="carto-positron")
     st.plotly_chart(fig_map_cluster, use_container_width=True)
-
-    # --- Cluster Highlights ---
+    
+    # --- Cluster Highlights --- #
     st.subheader("🔎 Key Highlights per Cluster")
     cluster_means = clustering_df.groupby("Cluster")[features].mean()
     st.dataframe(cluster_means.style.background_gradient(cmap="Blues"))
+
+    cluster_summary = []
 
     for cl in sorted(clustering_df["Cluster"].unique()):
         sub = clustering_df[clustering_df["Cluster"]==cl]
@@ -328,5 +330,55 @@ else:
             - Kejahatan paling sering: {top_crime}
             """
         )
+
+        cluster_summary.append((cl, avg_pop, avg_den, top_div, top_crime))
+
+
+    # --- Kesimpulan Global & 5 Poin ---
+    st.subheader("⭐ 5 Poin Penting dari Clustering")
+
+    if cluster_summary:
+        # Cari cluster dengan populasi & density tertinggi & terendah
+        max_pop_cluster = max(cluster_summary, key=lambda x: x[1])
+        max_den_cluster = max(cluster_summary, key=lambda x: x[2])
+        min_den_cluster = min(cluster_summary, key=lambda x: x[2])
+
+        # 5 Poin Penting
+        st.markdown(
+            f"""
+            1. **Populasi Tinggi = Risiko Tinggi**  
+               Cluster {max_pop_cluster[0]} punya populasi rata-rata tertinggi ({max_pop_cluster[1]:,} orang) → semakin banyak penduduk, semakin besar peluang kriminalitas.
+
+            2. **Kepadatan Penduduk Penting**  
+               Cluster {max_den_cluster[0]} dengan density {max_den_cluster[2]} orang/km² cenderung menggambarkan **kota besar/urban**, yang rawan kriminalitas.
+
+            3. **Wilayah Rural Lebih Aman**  
+               Cluster {min_den_cluster[0]} memiliki density terendah ({min_den_cluster[2]} orang/km²), umumnya wilayah pedesaan dengan tingkat kriminal lebih rendah.
+
+            4. **Kejahatan Dominan Berbeda**  
+               Setiap cluster punya jenis kejahatan dominan khas, contoh: {cluster_summary[0][4]} di Cluster {cluster_summary[0][0]}.
+
+            5. **Urbanisasi = Faktor Utama**  
+               Pola kriminalitas di Bangladesh sangat dipengaruhi oleh **urbanisasi** dan **kepadatan populasi**, bukan hanya jumlah penduduk total.
+            """
+        )
+
+        # Narasi Kesimpulan
+        st.subheader("📝 Kesimpulan Clustering")
+        st.markdown(
+            f"""
+            Dari hasil clustering:
+            - **Cluster {max_pop_cluster[0]}** menampung wilayah dengan populasi terbesar (rata-rata {max_pop_cluster[1]:,} penduduk), 
+              menunjukkan konsentrasi kejahatan lebih banyak di area padat penduduk.
+            - **Cluster {max_den_cluster[0]}** memiliki density penduduk tertinggi ({max_den_cluster[2]} orang/km²), 
+              cenderung menggambarkan area **urban** dengan risiko kriminalitas lebih tinggi.
+            - Sebaliknya, **Cluster {min_den_cluster[0]}** mewakili wilayah **rural** dengan density rendah ({min_den_cluster[2]} orang/km²), 
+              kemungkinan insiden kriminal lebih jarang dan terdistribusi.
+            
+            👉 Kesimpulannya, faktor **kepadatan penduduk** dan **urbanisasi** berperan besar dalam perbedaan pola kriminal di Bangladesh.
+            """
+        )
+
+
 
 st.markdown("---")
