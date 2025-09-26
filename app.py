@@ -251,7 +251,7 @@ if not filtered_df.empty:
     )
 
     if map_option == "Scatter Plot":
-        fig_map = px.scatter_mapbox(
+        fig_map = px.scatter_map(
             map_df,
             lat="latitude",
             lon="longitude",
