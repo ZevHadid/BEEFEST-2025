@@ -193,9 +193,6 @@ fig_time = px.pie(
 fig_time.update_traces(textposition='inside', textinfo='percent+label')
 st.plotly_chart(fig_time, use_container_width=True)
 
-<<<<<<< HEAD
-# Crime Incidents on a Map
-=======
 # Crime Type Horizontal Bar Chart
 st.subheader("Crime Count by Type")
 crime_type_counts = filtered_df['crime'].value_counts().reset_index()
@@ -213,7 +210,6 @@ st.plotly_chart(fig_crime_type, use_container_width=True)
 # Crime Rate Narrative Section
 st.subheader("Crime Rate vs Population Narrative")
 
->>>>>>> main
 if not filtered_df.empty:
     rate_df = filtered_df.groupby("incident_division").agg({
         "crime": "count",
@@ -279,7 +275,6 @@ st.write(
     "geographical, temporal, and environmental factors."
 )
 
-<<<<<<< HEAD
 # Check available columns and create appropriate features
 st.subheader("Available Columns for Clustering")
 st.write("Columns in your dataset:", list(df.columns))
@@ -290,18 +285,11 @@ potential_features = [
     'latitude', 'longitude', 'incident_month', 'weather_code', 
     'humidity', 'total_population', 'density_per_kmsq'
 ]
-=======
-ml_df = df.dropna(subset=['latitude', 'longitude', 'weather_code', 'humidity', 'total_population', 'density_per_kmsq', 'crime']).copy()
-
-features = ['latitude', 'longitude', 'weather_code', 'humidity', 'total_population', 'density_per_kmsq']
-target = 'crime'
->>>>>>> main
 
 for feature in potential_features:
     if feature in df.columns:
         available_features.append(feature)
 
-<<<<<<< HEAD
 st.write("Features available for clustering:", available_features)
 
 # Prepare data for clustering with only available features
@@ -544,39 +532,4 @@ else:
             )
             st.plotly_chart(fig_division_dist, use_container_width=True)
 
-=======
-le = LabelEncoder()
-y_encoded = le.fit_transform(y)
-
-X_train, X_test, y_train, y_test = train_test_split(X, y_encoded, test_size=0.2, random_state=42)
-
-model = DecisionTreeClassifier(random_state=42)
-model.fit(X_train, y_train)
-
-y_pred = model.predict(X_test)
-accuracy = accuracy_score(y_test, y_pred)
-st.write(f"**Model Accuracy:** {accuracy:.2f}")
-st.info("The model's accuracy is a good starting point but can be improved with more features and a more complex model.")
-
-# --- Interactive Prediction Form ---
-st.subheader("Predict a Crime Type")
-st.sidebar.header("Make a Prediction")
-st.sidebar.markdown("Input the values below to get a crime prediction.")
-
-pred_latitude = st.sidebar.slider("Latitude", float(X['latitude'].min()), float(X['latitude'].max()), float(X['latitude'].mean()))
-pred_longitude = st.sidebar.slider("Longitude", float(X['longitude'].min()), float(X['longitude'].max()), float(X['longitude'].mean()))
-pred_weather_code = st.sidebar.number_input("Weather Code", value=int(X['weather_code'].mean()))
-pred_humidity = st.sidebar.slider("Humidity (%)", float(X['humidity'].min()), float(X['humidity'].max()), float(X['humidity'].mean()))
-pred_population = st.sidebar.number_input("Total Population", value=int(X['total_population'].mean()), step=1000)
-pred_density = st.sidebar.number_input("Density (per sq km)", value=float(X['density_per_kmsq'].mean()))
-
-if st.sidebar.button("Predict Crime"):
-    input_data = pd.DataFrame([[pred_latitude, pred_longitude, pred_weather_code, pred_humidity, pred_population, pred_density]],
-                              columns=features)
-    predicted_encoded = model.predict(input_data)
-    predicted_crime = le.inverse_transform(predicted_encoded)
-    st.sidebar.success(f"The predicted crime is: **{predicted_crime[0]}**")
-    st.sidebar.markdown(f"**How it works:** The model uses the features you provided to classify the most likely crime type.")
-
->>>>>>> main
 st.markdown("---")
