@@ -200,11 +200,10 @@ st.plotly_chart(fig_time, use_container_width=True)
 st.subheader("Crime Count by Type")
 crime_type_counts = filtered_df['crime'].value_counts().reset_index()
 crime_type_counts.columns = ['Crime Type', 'Count']
-fig_crime_type = px.bar(
+fig_crime_type = px.pie(
     crime_type_counts,
-    x='Count',
-    y='Crime Type',
-    orientation='h',
+    values='Count',
+    names='Crime Type',
     title="Total Crime by Type",
     template="plotly_white",
     color='Count'
