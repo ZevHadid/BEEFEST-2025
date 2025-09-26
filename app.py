@@ -219,10 +219,21 @@ if not filtered_df.empty:
     rate_df["crime_rate_per_1000"] = (rate_df["crime_count"] / rate_df["total_population"]) * 1000
 
     for _, row in rate_df.iterrows():
-        ratio = round(row["total_population"] / row["crime_count"]) if row["crime_count"] > 0 else "-"
-        st.markdown(f"<h4>Di {row['incident_division']}, terdapat {row['crime_count']} kasus kriminal tercatat. Itu berarti sekitar 1 dari {ratio} penduduk pernah tercatat melakukan kejahatan.</h4>", unsafe_allow_html=True)
+        if row["crime_count"] > 0 and row["total_population"] > 0:
+            percent = (row["crime_count"] / row["total_population"]) * 100
+            st.markdown(
+                f"<h4>Di {row['incident_division']}, terdapat {row['crime_count']} kasus kriminal tercatat. "
+                f"Itu berarti sekitar {percent:.2f}% dari {int(row['total_population'])} penduduk pernah tercatat melakukan kejahatan.</h4>",
+                unsafe_allow_html=True
+            )
+        else:
+            st.markdown(
+                f"<h4>Di {row['incident_division']}, tidak ada data yang cukup untuk menghitung persentase kejahatan.</h4>",
+                unsafe_allow_html=True
+            )
 
-    st.caption("Perhitungan rasio berdasarkan jumlah kasus kriminal dibagi dengan rata-rata populasi di tiap divisi.")
+    st.caption("Perhitungan persentase berdasarkan jumlah kasus kriminal dibagi dengan rata-rata populasi di tiap divisi.")
+
 else:
     st.info("Data tidak tersedia untuk membuat narasi rasio.")
 
