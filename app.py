@@ -249,268 +249,84 @@ if not filtered_df.empty:
 else:
     st.warning("No data to display on the map with the current filters.")
 
-# --- Machine Learning Section - Clustering ---
 st.header("3. Crime Pattern Analysis: Clustering")
 st.write(
-    "This section uses K-Means clustering to identify patterns and groups in crime data based on "
-    "geographical, temporal, and environmental factors."
+    "K-Means clustering digunakan untuk menemukan pola kriminal berdasarkan faktor geospasial & populasi."
 )
 
-# Check available columns and create appropriate features
-st.subheader("Available Columns for Clustering")
-st.write("Columns in your dataset:", list(df.columns))
+features = ['latitude', 'longitude', 'total_population', 'density_per_kmsq']
+clustering_df = df.dropna(subset=features).copy()
 
-# Create a safe list of features that actually exist in the dataset
-available_features = []
-potential_features = [
-    'latitude', 'longitude', 'incident_month', 'weather_code', 
-    'humidity', 'total_population', 'density_per_kmsq'
-]
-
-for feature in potential_features:
-    if feature in df.columns:
-        available_features.append(feature)
-
-st.write("Features available for clustering:", available_features)
-
-# Prepare data for clustering with only available features
-clustering_df = df.dropna(subset=available_features).copy()
-
-if len(clustering_df) == 0:
-    st.warning("No data available for clustering after removing missing values.")
+if clustering_df.empty:
+    st.warning("Data tidak cukup untuk clustering (missing values pada fitur).")
 else:
-    X = clustering_df[available_features]
-
-    # Standardize the features
+    X = clustering_df[features]
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(X)
 
-    # Sidebar for clustering parameters
-    st.sidebar.header("Clustering Parameters")
-    
-    # Elbow Method Section
-    st.subheader("Elbow Method for Optimal Cluster Selection")
-    st.write("The elbow method helps determine the optimal number of clusters by finding the point where the inertia (within-cluster sum of squares) starts decreasing linearly.")
-    
-    # Calculate inertia for different numbers of clusters
-    max_clusters = min(10, len(X_scaled) - 1)  # Ensure we don't exceed data points
-    inertia_values = []
-    silhouette_scores = []
-    k_range = range(2, max_clusters + 1)
-    
-    with st.spinner("Calculating optimal number of clusters..."):
-        for k in k_range:
-            kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
-            kmeans.fit(X_scaled)
-            inertia_values.append(kmeans.inertia_)
-            
-            # Calculate silhouette score (if enough data points)
-            if k < len(X_scaled):
-                silhouette_scores.append(silhouette_score(X_scaled, kmeans.labels_))
-            else:
-                silhouette_scores.append(0)
-    
-    # Create elbow plot
-    fig_elbow = go.Figure()
-    fig_elbow.add_trace(go.Scatter(
-        x=list(k_range),
-        y=inertia_values,
-        mode='lines+markers',
-        name='Inertia',
-        line=dict(color='blue', width=2),
-        marker=dict(size=8)
-    ))
-    fig_elbow.update_layout(
-        title='Elbow Method for Optimal Number of Clusters',
-        xaxis_title='Number of Clusters',
-        yaxis_title='Inertia (Within-cluster Sum of Squares)',
-        template="plotly_white"
-    )
-    
-    # Add silhouette score plot
-    fig_silhouette = go.Figure()
-    fig_silhouette.add_trace(go.Scatter(
-        x=list(k_range),
-        y=silhouette_scores,
-        mode='lines+markers',
-        name='Silhouette Score',
-        line=dict(color='green', width=2),
-        marker=dict(size=8)
-    ))
-    fig_silhouette.update_layout(
-        title='Silhouette Scores for Different Numbers of Clusters',
-        xaxis_title='Number of Clusters',
-        yaxis_title='Silhouette Score',
-        template="plotly_white"
-    )
-    
-    # Display both plots side by side
+    # --- Elbow & Silhouette ---
+    max_clusters = min(8, len(X_scaled)-1)
+    inertia, sil_scores = [], []
+    for k in range(2, max_clusters+1):
+        kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
+        labels = kmeans.fit_predict(X_scaled)
+        inertia.append(kmeans.inertia_)
+        sil_scores.append(silhouette_score(X_scaled, labels))
+
     col1, col2 = st.columns(2)
     with col1:
+        fig_elbow = go.Figure(go.Scatter(x=list(range(2, max_clusters+1)), y=inertia, mode="lines+markers"))
+        fig_elbow.update_layout(title="Elbow Method", xaxis_title="Clusters", yaxis_title="Inertia")
         st.plotly_chart(fig_elbow, use_container_width=True)
     with col2:
-        st.plotly_chart(fig_silhouette, use_container_width=True)
-    
-    # Find suggested optimal k (elbow point)
-    # Simple method: find the point where the decrease in inertia starts to slow down
-    differences = [inertia_values[i-1] - inertia_values[i] for i in range(1, len(inertia_values))]
-    if differences:
-        # Find the point with the largest change in the rate of decrease
-        second_differences = [differences[i-1] - differences[i] for i in range(1, len(differences))]
-        if second_differences:
-            suggested_k = k_range[second_differences.index(max(second_differences)) + 2]
-        else:
-            suggested_k = 3  # Default fallback
-    else:
-        suggested_k = 3
-    
-    # Also consider silhouette scores
-    silhouette_optimal = k_range[silhouette_scores.index(max(silhouette_scores))]
-    
-    st.info(f"""
-    **Optimal Cluster Suggestions:**
-    - **Elbow method suggests**: {suggested_k} clusters
-    - **Silhouette method suggests**: {silhouette_optimal} clusters (score: {max(silhouette_scores):.3f})
-    """)
-    
-    # Let user choose between suggested or manual
-    cluster_choice = st.radio(
-        "Choose number of clusters:",
-        ["Use elbow method suggestion", "Use silhouette method suggestion", "Choose manually"],
-        index=0
-    )
-    
-    if cluster_choice == "Use elbow method suggestion":
-        n_clusters = suggested_k
-    elif cluster_choice == "Use silhouette method suggestion":
-        n_clusters = silhouette_optimal
-    else:
-        n_clusters = st.slider("Number of Clusters", min_value=2, max_value=max_clusters, value=suggested_k)
-    
-    st.sidebar.write(f"**Selected clusters:** {n_clusters}")
+        fig_sil = go.Figure(go.Scatter(x=list(range(2, max_clusters+1)), y=sil_scores, mode="lines+markers"))
+        fig_sil.update_layout(title="Silhouette Scores", xaxis_title="Clusters", yaxis_title="Score")
+        st.plotly_chart(fig_sil, use_container_width=True)
 
-    # Perform K-means clustering with selected k
+    # --- User pilih cluster ---
+    n_clusters = st.slider("Pilih jumlah cluster", 2, max_clusters, 3)
     kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
-    clusters = kmeans.fit_predict(X_scaled)
-    clustering_df['Cluster'] = clusters
+    clustering_df["Cluster"] = kmeans.fit_predict(X_scaled)
 
-    # Add PCA for visualization if we have enough features
-    if len(available_features) > 1:
-        pca = PCA(n_components=2)
-        X_pca = pca.fit_transform(X_scaled)
-        clustering_df['PCA1'] = X_pca[:, 0]
-        clustering_df['PCA2'] = X_pca[:, 1]
-        
-        # Display PCA explained variance
-        st.write(f"PCA Explained Variance: {pca.explained_variance_ratio_.sum():.2f}")
+    # --- PCA ---
+    pca = PCA(n_components=2)
+    coords = pca.fit_transform(X_scaled)
+    clustering_df["PCA1"], clustering_df["PCA2"] = coords[:,0], coords[:,1]
 
-    # Display clustering results
-    st.subheader(f"Clustering Results ({n_clusters} Clusters)")
+    st.subheader(f"Hasil Clustering ({n_clusters} Cluster)")
+    fig_pca = px.scatter(clustering_df, x="PCA1", y="PCA2", color="Cluster",
+                         hover_data=["incident_division","crime"], template="plotly_white")
+    st.plotly_chart(fig_pca, use_container_width=True)
 
-    # Cluster distribution
-    cluster_counts = clustering_df['Cluster'].value_counts().sort_index()
-    fig_cluster_dist = px.bar(
-        x=cluster_counts.index,
-        y=cluster_counts.values,
-        labels={'x': 'Cluster', 'y': 'Number of Incidents'},
-        title=f"Distribution of Crime Incidents Across {n_clusters} Clusters",
-        color=cluster_counts.index,
-        template="plotly_white"
+    # --- Map Cluster ---
+    fig_map_cluster = px.scatter_mapbox(
+        clustering_df, lat="latitude", lon="longitude", color="Cluster",
+        hover_name="incident_division", hover_data=["crime","total_population","density_per_kmsq"],
+        zoom=6, height=600
     )
-    st.plotly_chart(fig_cluster_dist, use_container_width=True)
+    fig_map_cluster.update_layout(mapbox_style="carto-positron")
+    st.plotly_chart(fig_map_cluster, use_container_width=True)
 
-    # PCA visualization (only if we have PCA components)
-    if 'PCA1' in clustering_df.columns and 'PCA2' in clustering_df.columns:
-        fig_pca = px.scatter(
-            clustering_df,
-            x='PCA1',
-            y='PCA2',
-            color='Cluster',
-            hover_data=['crime', 'incident_division'],
-            title="PCA Visualization of Crime Clusters",
-            template="plotly_white"
+    # --- Cluster Highlights ---
+    st.subheader("🔎 Key Highlights per Cluster")
+    cluster_means = clustering_df.groupby("Cluster")[features].mean()
+    st.dataframe(cluster_means.style.background_gradient(cmap="Blues"))
+
+    for cl in sorted(clustering_df["Cluster"].unique()):
+        sub = clustering_df[clustering_df["Cluster"]==cl]
+        avg_pop = int(sub["total_population"].mean())
+        avg_den = round(sub["density_per_kmsq"].mean(),2)
+        top_div = sub["incident_division"].value_counts().idxmax()
+        top_crime = sub["crime"].value_counts().idxmax()
+
+        st.markdown(
+            f"""
+            **Cluster {cl}:**
+            - Rata-rata populasi: {avg_pop:,}
+            - Rata-rata density: {avg_den} orang/km²
+            - Divisi dominan: {top_div}
+            - Kejahatan paling sering: {top_crime}
+            """
         )
-        st.plotly_chart(fig_pca, use_container_width=True)
-
-    # Cluster characteristics
-    st.subheader("Cluster Characteristics")
-
-    # Display mean values for each cluster
-    cluster_means = clustering_df.groupby('Cluster')[available_features].mean()
-    st.write("Average Feature Values by Cluster:")
-    st.dataframe(cluster_means.style.background_gradient(cmap='Blues'))
-
-    # Crime type distribution within clusters
-    st.subheader("Crime Type Distribution within Clusters")
-    cluster_crime_dist = pd.crosstab(clustering_df['Cluster'], clustering_df['crime'], normalize='index') * 100
-    fig_cluster_crime = px.imshow(
-        cluster_crime_dist,
-        title="Crime Type Distribution by Cluster (%)",
-        aspect="auto",
-        color_continuous_scale="Blues"
-    )
-    st.plotly_chart(fig_cluster_crime, use_container_width=True)
-
-    # Geographical visualization of clusters
-    st.subheader("Geographical Distribution of Clusters")
-    if not clustering_df.empty:
-        fig_cluster_map = px.scatter_map(
-            clustering_df,
-            lat='latitude',
-            lon='longitude',
-            color='Cluster',
-            hover_name='crime',
-            hover_data=['incident_division', 'incident_month'],
-            title="Geographical Distribution of Crime Clusters",
-            zoom=6,
-            height=600
-        )
-        fig_cluster_map.update_layout(mapbox_style="open-street-map")
-        st.plotly_chart(fig_cluster_map, use_container_width=True)
-
-    # Cluster interpretation
-    st.subheader("Cluster Interpretation")
-    st.write("""
-    **How to interpret the clusters:**
-    - Each cluster represents a group of crime incidents with similar characteristics
-    - Clusters may represent patterns like: urban vs rural crimes, seasonal patterns, 
-      weather-related patterns, or population density correlations
-    - Use the cluster characteristics table to understand what makes each cluster unique
-    """)
-
-    # Interactive cluster exploration
-    st.sidebar.header("Explore Specific Cluster")
-    selected_cluster = st.sidebar.selectbox("Select Cluster to Explore", options=sorted(clustering_df['Cluster'].unique()))
-
-    if selected_cluster is not None:
-        cluster_data = clustering_df[clustering_df['Cluster'] == selected_cluster]
-        
-        st.subheader(f"Detailed Analysis of Cluster {selected_cluster}")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            # Top crimes in cluster
-            top_crimes = cluster_data['crime'].value_counts().head(5)
-            fig_top_crimes = px.bar(
-                x=top_crimes.index,
-                y=top_crimes.values,
-                title=f"Top 5 Crimes in Cluster {selected_cluster}",
-                labels={'x': 'Crime Type', 'y': 'Count'},
-                color=top_crimes.values,
-                color_continuous_scale="Blues"
-            )
-            st.plotly_chart(fig_top_crimes, use_container_width=True)
-        
-        with col2:
-            # Division distribution in cluster
-            division_dist = cluster_data['incident_division'].value_counts()
-            fig_division_dist = px.pie(
-                values=division_dist.values,
-                names=division_dist.index,
-                title=f"Division Distribution in Cluster {selected_cluster}",
-                hole=0.4
-            )
-            st.plotly_chart(fig_division_dist, use_container_width=True)
 
 st.markdown("---")
