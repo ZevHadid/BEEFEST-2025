@@ -207,36 +207,6 @@ fig_crime_type = px.pie(
 )
 st.plotly_chart(fig_crime_type, use_container_width=True)
 
-# Crime Rate Narrative Section
-st.subheader("Crime Rate vs Population Narrative")
-
-if not filtered_df.empty:
-    rate_df = filtered_df.groupby("incident_division").agg({
-        "crime": "count",
-        "total_population": "mean"
-    }).reset_index().rename(columns={"crime":"crime_count"})
-
-    rate_df["crime_rate_per_1000"] = (rate_df["crime_count"] / rate_df["total_population"]) * 1000
-
-    for _, row in rate_df.iterrows():
-        if row["crime_count"] > 0 and row["total_population"] > 0:
-            percent = (row["crime_count"] / row["total_population"]) * 100
-            st.markdown(
-                f"<h4>Di {row['incident_division']}, terdapat {row['crime_count']} kasus kriminal tercatat. "
-                f"Itu berarti sekitar {percent:.2f}% dari {int(row['total_population'])} penduduk pernah tercatat melakukan kejahatan.</h4>",
-                unsafe_allow_html=True
-            )
-        else:
-            st.markdown(
-                f"<h4>Di {row['incident_division']}, tidak ada data yang cukup untuk menghitung persentase kejahatan.</h4>",
-                unsafe_allow_html=True
-            )
-
-    st.caption("Perhitungan persentase berdasarkan jumlah kasus kriminal dibagi dengan rata-rata populasi di tiap divisi.")
-
-else:
-    st.info("Data tidak tersedia untuk membuat narasi rasio.")
-
 # Crime Incidents on the Map
 st.subheader("Crime Incidents on the Map")
 st.markdown("Zoom and pan to explore crime locations across Bangladesh.")
